@@ -10,18 +10,18 @@
     config WDT    = OFF	        ; Desactiva el Watchdog Timer
     config LVP    = OFF	        ; Deshabilita la programaci?n en bajo voltaje
     config MCLRE  = OFF		; Contrala si el pin MCLR es: ON: Pin de Reset, OFF: Se convierte en entrada digital
-    CONFIG PWRT   = ON	        ; Es el Power-ip Timer: ON:Agrega un pequeño retardo cuando el PIC enciende, OFF: Arranca inmediatamente
+    CONFIG PWRT   = ON	        ; Es el Power-up Timer: ON:Agrega un pequeño retardo cuando el PIC enciende, OFF: Arranca inmediatamente
     CONFIG PBADEN = OFF
     CONFIG DEBUG  = OFF
     
     ;=== Vectores de Inicio ===
-    PSECT resetVec, class=CODE, reloc=2 ; Secci?n para el vector de reinicio
+    PSECT resetVec, class=CODE, reloc=2 ; Seccion para el vector de reinicio
 resetVec:
     ORG 0x00				; Direccion de inicio
     GOTO Inicio				; Saltar a la rutina de inicio
     
     ;=== Codigo Principal ===
-    PSECT main_code, class=CODE, reloc=2  ; Secci?n de c?digo principal
+    PSECT main_code, class=CODE, reloc=2  ; Seccion de codigo principal
     
 Inicio:
     MOVLW 0b01110010
@@ -29,7 +29,11 @@ Inicio:
     BCF   TRISD, 0, A	    ; PORTD(0) como salida
     BSF   LATD, 0, A	    ; Apagar pin 0 de PORTD
     
-    ; Configurar Timer0: 16 bits, preescaler 1:256, reloj interno
+    ; Configurar Timer0:
+    ; Modo 16 bits
+    ; Reloj interno
+    ; Preescaler 1:256
+    ; Timer encendido (inicio)
     MOVLW   0x87
     MOVWF   T0CON, A
    
@@ -37,8 +41,20 @@ Inicio:
     BSF     T0CON,  7, A ; Timer0 = ON
     
 Loop:
+    ; === Encender 1 segundo ===
+    BSF LATD, 0, A
     CALL Espera
-    BTG LATD , 0, A ; Cambiar el estado del LED
+    
+    ; === Apagar 2 segundos ===
+    BCF LATD, 0, A
+    MOVLW 2
+    MOVWF Contador, A
+
+Apagado:
+    CALL Espera
+    DECFSZ Contador, F, A
+    GOTO Apagado
+    
     GOTO Loop
 
 Espera:
@@ -55,7 +71,7 @@ Espera:
     BCF   INTCON, 2, A ; Limpiar bandera
     BSF   T0CON,  7, A ; Iniciar timer
     
-    ;Esperar desbordamiento
+    ; Esperar hasta que TMR0IF = 1 (overflow del Timer0)
 EsperaLoop:
     BTFSS INTCON, 2, A
     GOTO EsperaLoop
