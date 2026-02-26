@@ -1,33 +1,42 @@
 ;==================================================================
-;Codigo en Assembler para PIC18F4550
-;Usa retardos con Timer0
-;Frecuencia: 8MHz
+; Parpadeo de LED con Timer0
+; PORTB(0): 1 segundos encendido, 2 segundos apagado 
+; Frecuencia: 8MHz
 ;==================================================================
+    
     #include <xc.inc>  
     
-    ; Configuracion de bits de confiuracion
+;=== Configuracion ===
     config FOSC   = INTOSCIO_EC ; Usa el oscilador interno a 8MHz
     config WDT    = OFF	        ; Desactiva el Watchdog Timer
-    config LVP    = OFF	        ; Deshabilita la programaci?n en bajo voltaje
-    config MCLRE  = OFF		; Contrala si el pin MCLR es: ON: Pin de Reset, OFF: Se convierte en entrada digital
-    CONFIG PWRT   = ON	        ; Es el Power-up Timer: ON:Agrega un pequeño retardo cuando el PIC enciende, OFF: Arranca inmediatamente
-    CONFIG PBADEN = OFF
-    CONFIG DEBUG  = OFF
+    config LVP    = OFF	        ; Programacion en bajo voltaje desactivada
+    config MCLRE  = ON		; Pin MCLR habilitado como reset
+    CONFIG PWRT   = ON	        ; Power-up Timer activado (retardo al encender)
+    CONFIG PBADEN = OFF		; PORTB como digitales (no analogicos)
+    CONFIG DEBUG  = OFF		; Debug desactivado
     
-    ;=== Vectores de Inicio ===
+;=== Vectores de Inicio ===
     PSECT resetVec, class=CODE, reloc=2 ; Seccion para el vector de reinicio
 resetVec:
     ORG 0x00				; Direccion de inicio
     GOTO Inicio				; Saltar a la rutina de inicio
     
-    ;=== Codigo Principal ===
-    PSECT main_code, class=CODE, reloc=2  ; Seccion de codigo principal
+;=== Codigo Principal ===
+    PSECT main_code, class=CODE, reloc=2 
     
 Inicio:
+    ; Configurar oscilador interno a 8MHz
     MOVLW 0b01110010
     MOVWF OSCCON, A
-    BCF   TRISD, 0, A	    ; PORTD(0) como salida
-    BSF   LATD, 0, A	    ; Apagar pin 0 de PORTD
+    
+EsperaOsc:
+    ; Esperar hasta que el oscilador interno este estable
+    BTFSS OSCCON, 2, A
+    GOTO  EsperaOsc
+    
+    ; Configurar PORTB como salida y apagado
+    CLRF  TRISB, A
+    CLRF  LATB, A	   
     
     ; Configurar Timer0:
     ; Modo 16 bits
@@ -37,18 +46,16 @@ Inicio:
     MOVLW   0x87
     MOVWF   T0CON, A
    
-    BCF     INTCON, 2, A ; Limpiar bandera
-    BSF     T0CON,  7, A ; Timer0 = ON
-    
+    BCF     INTCON, 2, A ; Limpiar bandera antes de empezar
+
+;=== Bucle principal ===
 Loop:
-    ; === Encender 1 segundo ===
-    BSF LATD, 0, A
-    CALL Espera
+    BSF LATB, 0, A     ; Encender LED (RB0)
+    CALL Espera	       ; Retardo 1 segundo
     
-    ; === Apagar 2 segundos ===
-    BCF LATD, 0, A
+    BCF LATB, 0, A     ; Apagar LED (RB0)
     MOVLW 2
-    MOVWF Contador, A
+    MOVWF Contador, A  ; Contador para 2 segundos
 
 Apagado:
     CALL Espera
@@ -69,16 +76,16 @@ Espera:
     MOVWF TMR0L, A
     
     BCF   INTCON, 2, A ; Limpiar bandera
-    BSF   T0CON,  7, A ; Iniciar timer
+    BSF   T0CON,  7, A ; Iniciar Timer0
     
     ; Esperar hasta que TMR0IF = 1 (overflow del Timer0)
 EsperaLoop:
     BTFSS INTCON, 2, A
     GOTO EsperaLoop
-    BCF INTCON, 2, A 
+    BCF INTCON, 2, A ; Limpiar bandera TMR0IF
     Return
     
     ;=== Variables ===
-    PSECT udata 
+    PSECT udata_acs, class=COMRAM
 Contador: DS 1
     END
