@@ -1,20 +1,23 @@
 ;=========================================================
 ; Código en Assembler para PIC18F4550
 ; LED en RB0
-; Parpadeo infinito con retardos de software (aproximados)
+; Parpadeo con retardo preciso de 250ms usando Timer1
 ;=========================================================
 
 #include <xc.inc>
 
-    CONFIG  FOSC = INTOSC_HS    ; Usa oscilador interno
-    CONFIG  WDT = OFF           ; Desactiva Watchdog Timer
-    CONFIG  LVP = OFF           ; Desactiva programación en bajo voltaje
-    CONFIG  PBADEN = OFF        ; PORTB inicia como digital
+    CONFIG  FOSC = INTOSC_HS
+    CONFIG  WDT = OFF
+    CONFIG  LVP = OFF
+    CONFIG  PBADEN = OFF
+
+    ; Preload para Timer1: desborde en 250ms (8MHz, prescaler 1:8)
+    #define TMR1_HIGH  0b00001011
+    #define TMR1_LOW   0b11011100
 
 ;=========================================================
 ; Vector de Reset
 ;=========================================================
-
     PSECT  resetVec, class=CODE, reloc=2
     ORG     0x00
     GOTO    Inicio
@@ -22,46 +25,53 @@
 ;=========================================================
 ; Código principal
 ;=========================================================
-
     PSECT  main_code, class=CODE, reloc=2
 
 Inicio:
-    MOVLW   0b01110000         ; 8 MHz interno
+    MOVLW   0b01110000
     MOVWF   OSCCON
     NOP
     NOP
 
-    CLRF    TRISB              ; Puerto B como salida
-    CLRF    LATB               ; LED apagado
+    CLRF    TRISB
+    CLRF    LATB
+
+    ; Configurar Timer1: 16 bits, prescaler 1:8, reloj interno
+    MOVLW   0b10110000
+    MOVWF   T1CON
+    BCF     T1CON, 0           ; Timer apagado por ahora
 
 BuclePrincipal:
-    BSF     LATB, 0            ; LED ON
-    CALL    Retardo            ; Espera
-    BCF     LATB, 0            ; LED OFF
-    CALL    Retardo            ; Espera
+    BSF     LATB, 0
+    CALL    Retardo_250ms
+    BCF     LATB, 0
+    CALL    Retardo_250ms
     GOTO    BuclePrincipal
 
 ;=========================================================
-; Subrutina de retardo aproximado (software)
+; Subrutina de retardo de 250ms usando Timer1
 ;=========================================================
-Retardo:
-    MOVLW   0xFF
-    MOVWF   Contador1
-Loop1:
-    MOVLW   0xFF
-    MOVWF   Contador2
-Loop2:
-    DECFSZ  Contador2, F
-    GOTO    Loop2
-    DECFSZ  Contador1, F
-    GOTO    Loop1
+Retardo_250ms:
+    ; Cargar preload
+    MOVLW   TMR1_HIGH
+    MOVWF   TMR1H
+    MOVLW   TMR1_LOW
+    MOVWF   TMR1L
+
+    BCF     PIR1, 0            ; Limpiar bandera de overflow
+    BSF     T1CON, 0           ; Encender timer
+
+Espera:
+    BTFSS   PIR1, 0            ; ¿Desbordó?
+    GOTO    Espera
+
+    BCF     T1CON, 0           ; Apagar timer
     RETURN
 
 ;=========================================================
 ; Variables en RAM
 ;=========================================================
     PSECT udata
-Contador1:  DS 1
-Contador2:  DS 1
+; (No se necesitan variables adicionales aún)
 
     END
