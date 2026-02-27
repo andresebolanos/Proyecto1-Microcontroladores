@@ -1,7 +1,8 @@
 ;=========================================================
 ; Código en Assembler para PIC18F4550
 ; LED en RB0
-; Fase 1: 5 parpadeos de 1s (ON 1s, OFF 1s)
+; Secuencia completa:
+; 5 parpadeos de 1s + 2 parpadeos de 2s, en bucle infinito
 ;=========================================================
 
 #include <xc.inc>
@@ -43,7 +44,6 @@ BuclePrincipal:
     ; Fase 1: 5 parpadeos de 1s
     MOVLW   5
     MOVWF   NumBlinks
-
 Ciclo5Blinks:
     BSF     LATB, 0
     CALL    Retardo_1s
@@ -52,12 +52,21 @@ Ciclo5Blinks:
     DECFSZ  NumBlinks, F
     GOTO    Ciclo5Blinks
 
-    ; Por ahora, al terminar se queda en un bucle infinito (para prueba)
-    ; Más adelante agregaremos la segunda fase
-    GOTO    $
+    ; Fase 2: 2 parpadeos de 2s
+    MOVLW   2
+    MOVWF   NumBlinks
+Ciclo2Blinks:
+    BSF     LATB, 0
+    CALL    Retardo_2s
+    BCF     LATB, 0
+    CALL    Retardo_2s
+    DECFSZ  NumBlinks, F
+    GOTO    Ciclo2Blinks
+
+    GOTO    BuclePrincipal   ; Repetir todo
 
 ;=========================================================
-; Subrutinas de retardo (igual que antes)
+; Subrutinas de retardo
 ;=========================================================
 Retardo_1s:
     MOVLW   4
