@@ -1,7 +1,7 @@
 ;=========================================================
 ; Código en Assembler para PIC18F4550
 ; LED en RB0
-; Añadidos retardos de 1s y 2s mediante contador de desbordes
+; Fase 1: 5 parpadeos de 1s (ON 1s, OFF 1s)
 ;=========================================================
 
 #include <xc.inc>
@@ -40,26 +40,36 @@ Inicio:
     BCF     T1CON, 0
 
 BuclePrincipal:
+    ; Fase 1: 5 parpadeos de 1s
+    MOVLW   5
+    MOVWF   NumBlinks
+
+Ciclo5Blinks:
     BSF     LATB, 0
-    CALL    Retardo_1s          ; Ahora 1 segundo
+    CALL    Retardo_1s
     BCF     LATB, 0
     CALL    Retardo_1s
-    GOTO    BuclePrincipal
+    DECFSZ  NumBlinks, F
+    GOTO    Ciclo5Blinks
+
+    ; Por ahora, al terminar se queda en un bucle infinito (para prueba)
+    ; Más adelante agregaremos la segunda fase
+    GOTO    $
 
 ;=========================================================
-; Subrutinas de retardo
+; Subrutinas de retardo (igual que antes)
 ;=========================================================
 Retardo_1s:
-    MOVLW   4                   ; 4 desbordes de 250ms = 1s
+    MOVLW   4
     MOVWF   ContadorDesbordes
     BRA     IniciarTimer
 
 Retardo_2s:
-    MOVLW   8                   ; 8 desbordes = 2s
+    MOVLW   8
     MOVWF   ContadorDesbordes
 
 IniciarTimer:
-    BCF     T1CON, 0            ; Apagar timer
+    BCF     T1CON, 0
     MOVLW   TMR1_HIGH
     MOVWF   TMR1H
     MOVLW   TMR1_LOW
@@ -70,10 +80,8 @@ IniciarTimer:
 EsperarDesborde:
     BTFSS   PIR1, 0
     GOTO    EsperarDesborde
-
     DECFSZ  ContadorDesbordes, F
     GOTO    IniciarTimer
-
     BCF     T1CON, 0
     RETURN
 
@@ -81,6 +89,7 @@ EsperarDesborde:
 ; Variables en RAM
 ;=========================================================
     PSECT udata
+NumBlinks:          DS 1
 ContadorDesbordes:  DS 1
 
     END
