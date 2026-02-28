@@ -1,8 +1,8 @@
 ;=========================================================
-; Versión con Timer1 para retardos precisos (velocidad fija)
-; - Se configura Timer1 con prescaler 1:8
-; - Se precarga para obtener ~75ms por desborde
-; - Se esperan 8 desbordes (~600ms) por paso
+; Versión con cambio de secuencia mediante RB0
+; - Se añade rutina AntirreboteSeq
+; - SeqIdx cicla 0->1->2->3->0
+; - StepIdx se reinicia al cambiar de secuencia
 ;=========================================================
 #include <xc.inc>
 
@@ -14,6 +14,7 @@
     ; Precarga para Timer1 (8MHz, prescaler 1:8, desborde ~75ms)
     #define TMR1_HIGH_LENTO   0b00001011
     #define TMR1_LOW_LENTO    0b11011100
+    #define BTN_SEQ           0       ; Botón de cambio de secuencia en RB0
 
 ;=========================================================
 ; VARIABLES EN RAM
@@ -22,6 +23,7 @@
 SeqIdx:         DS 1    ; Secuencia activa (0-3)
 StepIdx:        DS 1    ; Paso actual dentro de la secuencia
 ContDesbordes:  DS 1    ; Contador de desbordes restantes
+TmpDebounce:    DS 1    ; Para loops de antirrebote
 
 ;=========================================================
 ; VECTOR DE RESET
@@ -45,8 +47,8 @@ Inicio:
     ; Configurar puertos
     CLRF    TRISD
     CLRF    LATD
-    BSF     TRISB, 0
-    BSF     TRISB, 1
+    BSF     TRISB, 0          ; RB0 como entrada (botón secuencia)
+    BSF     TRISB, 1          ; RB1 como entrada (futuro botón velocidad)
 
     ; Deshabilitar ADC
     MOVLW   0x0F
@@ -62,8 +64,13 @@ Inicio:
     CLRF    StepIdx         ; Paso 0
 
 BuclePrincipal:
-    CALL    EjecutarPaso    ; Muestra el patrón actual y avanza al siguiente
-    CALL    RetardoVel       ; Usa Timer1 (velocidad fija)
+    ; Revisar botón de secuencia RB0
+    BTFSC   PORTB, BTN_SEQ      ; ¿RB0 = 0 (presionado)?
+    GOTO    SkipSeq
+    CALL    AntirreboteSeq       ; Procesar pulsación
+SkipSeq:
+    CALL    EjecutarPaso        ; Muestra el patrón actual y avanza al siguiente
+    CALL    RetardoVel           ; Usa Timer1 (velocidad fija)
     GOTO    BuclePrincipal
 
 ;---------------------------------------------------------
@@ -180,6 +187,32 @@ TblSeq3:
     RETLW   0x0F
     RETLW   0x00
     RETLW   0x00
+
+;=========================================================
+; ANTIRREBOTE PARA SECUENCIA
+;=========================================================
+AntirreboteSeq:
+    MOVLW   0xFF
+    MOVWF   TmpDebounce
+DebSeqLoop:
+    DECFSZ  TmpDebounce, F
+    GOTO    DebSeqLoop
+
+    BTFSC   PORTB, BTN_SEQ       ; Verificar tras retardo
+    RETURN                       ; Fue ruido
+
+    INCF    SeqIdx, F
+    MOVLW   4
+    CPFSEQ  SeqIdx
+    GOTO    SeqIdxOk
+    CLRF    SeqIdx
+SeqIdxOk:
+    CLRF    StepIdx              ; Reiniciar paso
+
+SeqWaitRelease:
+    BTFSS   PORTB, BTN_SEQ       ; Esperar que suelte
+    GOTO    SeqWaitRelease
+    RETURN
 
 ;=========================================================
 ; RETARDO CON TIMER1 (velocidad fija: 8 desbordes)
