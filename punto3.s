@@ -1,7 +1,7 @@
 ;=========================================================
-; implementacion de cambio de velocidad (3 velocidades)
-; - VelIdx: 0=lenta (8 desb), 1=media (4 desb), 2=rápida (2 desb)
-; - Botón RB1 con antirrebote
+; mejora, con respuesta inmediata a botones durante el retardo
+; - Dentro de EsperarDesborde, si no ha desbordado, revisa RB0 y RB1
+; - Si se detecta pulsación, llama a la rutina correspondiente
 ;=========================================================
 #include <xc.inc>
 
@@ -248,7 +248,7 @@ VelWaitRelease:
     RETURN
 
 ;=========================================================
-; RETARDO CON TIMER1 SEGÚN VELOCIDAD
+; RETARDO CON TIMER1 SEGÚN VELOCIDAD (CON RESPUESTA INMEDIATA)
 ;=========================================================
 RetardoVel:
     ; Seleccionar número de desbordes según VelIdx
@@ -279,9 +279,24 @@ IniciarTimer:
 
 EsperarDesborde:
     BTFSS   PIR1, 0             ; ¿Desbordó?
-    GOTO    EsperarDesborde      ; No, seguir esperando
-    DECFSZ  ContDesbordes, F     ; Sí, descontar uno
-    GOTO    IniciarTimer         ; Faltan más, reiniciar Timer
+    GOTO    ChkBtnsEnRetardo    ; No, revisar botones
+    GOTO    TimerListo          ; Sí, ir a procesar desborde
+
+ChkBtnsEnRetardo:
+    ; Revisar RB0 (cambio de secuencia)
+    BTFSC   PORTB, BTN_SEQ
+    GOTO    ChkVel
+    CALL    AntirreboteSeq
+ChkVel:
+    ; Revisar RB1 (cambio de velocidad)
+    BTFSC   PORTB, BTN_VEL
+    GOTO    EsperarDesborde
+    CALL    AntirreboteVel
+    GOTO    EsperarDesborde
+
+TimerListo:
+    DECFSZ  ContDesbordes, F
+    GOTO    IniciarTimer
     BCF     T1CON, 0            ; Terminado, apagar Timer
     RETURN
 
