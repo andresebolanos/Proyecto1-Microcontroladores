@@ -1,8 +1,7 @@
 ;=========================================================
-; Versión con cambio de secuencia mediante RB0
-; - Se añade rutina AntirreboteSeq
-; - SeqIdx cicla 0->1->2->3->0
-; - StepIdx se reinicia al cambiar de secuencia
+; implementacion de cambio de velocidad (3 velocidades)
+; - VelIdx: 0=lenta (8 desb), 1=media (4 desb), 2=rápida (2 desb)
+; - Botón RB1 con antirrebote
 ;=========================================================
 #include <xc.inc>
 
@@ -15,6 +14,7 @@
     #define TMR1_HIGH_LENTO   0b00001011
     #define TMR1_LOW_LENTO    0b11011100
     #define BTN_SEQ           0       ; Botón de cambio de secuencia en RB0
+    #define BTN_VEL           1       ; Botón de cambio de velocidad en RB1
 
 ;=========================================================
 ; VARIABLES EN RAM
@@ -22,6 +22,7 @@
     PSECT udata
 SeqIdx:         DS 1    ; Secuencia activa (0-3)
 StepIdx:        DS 1    ; Paso actual dentro de la secuencia
+VelIdx:         DS 1    ; Velocidad seleccionada (0=lenta, 1=media, 2=rápida)
 ContDesbordes:  DS 1    ; Contador de desbordes restantes
 TmpDebounce:    DS 1    ; Para loops de antirrebote
 
@@ -48,7 +49,7 @@ Inicio:
     CLRF    TRISD
     CLRF    LATD
     BSF     TRISB, 0          ; RB0 como entrada (botón secuencia)
-    BSF     TRISB, 1          ; RB1 como entrada (futuro botón velocidad)
+    BSF     TRISB, 1          ; RB1 como entrada (botón velocidad)
 
     ; Deshabilitar ADC
     MOVLW   0x0F
@@ -62,6 +63,7 @@ Inicio:
     ; Inicializar variables
     CLRF    SeqIdx          ; Empezar con secuencia 0
     CLRF    StepIdx         ; Paso 0
+    CLRF    VelIdx          ; Comenzar con velocidad lenta
 
 BuclePrincipal:
     ; Revisar botón de secuencia RB0
@@ -69,8 +71,13 @@ BuclePrincipal:
     GOTO    SkipSeq
     CALL    AntirreboteSeq       ; Procesar pulsación
 SkipSeq:
+    ; Revisar botón de velocidad RB1
+    BTFSC   PORTB, BTN_VEL      ; ¿RB1 = 0 (presionado)?
+    GOTO    SkipVel
+    CALL    AntirreboteVel       ; Procesar pulsación
+SkipVel:
     CALL    EjecutarPaso        ; Muestra el patrón actual y avanza al siguiente
-    CALL    RetardoVel           ; Usa Timer1 (velocidad fija)
+    CALL    RetardoVel           ; Usa Timer1 con velocidad seleccionada
     GOTO    BuclePrincipal
 
 ;---------------------------------------------------------
@@ -215,10 +222,50 @@ SeqWaitRelease:
     RETURN
 
 ;=========================================================
-; RETARDO CON TIMER1 (velocidad fija: 8 desbordes)
+; ANTIRREBOTE PARA VELOCIDAD
+;=========================================================
+AntirreboteVel:
+    MOVLW   0xFF
+    MOVWF   TmpDebounce
+DebVelLoop:
+    DECFSZ  TmpDebounce, F
+    GOTO    DebVelLoop
+
+    BTFSC   PORTB, BTN_VEL       ; Verificar tras retardo
+    RETURN                       ; Fue ruido
+
+    INCF    VelIdx, F
+    MOVLW   3
+    CPFSEQ  VelIdx
+    GOTO    VelIdxOk
+    CLRF    VelIdx
+VelIdxOk:
+    ; No es necesario reiniciar StepIdx al cambiar velocidad
+
+VelWaitRelease:
+    BTFSS   PORTB, BTN_VEL       ; Esperar que suelte
+    GOTO    VelWaitRelease
+    RETURN
+
+;=========================================================
+; RETARDO CON TIMER1 SEGÚN VELOCIDAD
 ;=========================================================
 RetardoVel:
-    MOVLW   8                   ; 8 desbordes (lento)
+    ; Seleccionar número de desbordes según VelIdx
+    MOVF    VelIdx, W
+    BZ      DoLento
+    DECF    WREG, W
+    BZ      DoMedio
+    ; Velocidad rápida (2 desbordes)
+    MOVLW   2
+    MOVWF   ContDesbordes
+    GOTO    IniciarTimer
+DoLento:
+    MOVLW   8
+    MOVWF   ContDesbordes
+    GOTO    IniciarTimer
+DoMedio:
+    MOVLW   4
     MOVWF   ContDesbordes
 
 IniciarTimer:
