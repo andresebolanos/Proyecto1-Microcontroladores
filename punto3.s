@@ -1,8 +1,8 @@
 ;=========================================================
-; Versión con tablas de secuencias y avance de paso
-; - Se definen las 4 secuencias (0..3)
-; - Se ejecuta continuamente la secuencia 0 (cinta)
-; - Retardo simple con decremento (provisional)
+; Versión con Timer1 para retardos precisos (velocidad fija)
+; - Se configura Timer1 con prescaler 1:8
+; - Se precarga para obtener ~75ms por desborde
+; - Se esperan 8 desbordes (~600ms) por paso
 ;=========================================================
 #include <xc.inc>
 
@@ -11,13 +11,17 @@
     CONFIG  LVP  = OFF
     CONFIG  PBADEN = OFF
 
+    ; Precarga para Timer1 (8MHz, prescaler 1:8, desborde ~75ms)
+    #define TMR1_HIGH_LENTO   0b00001011
+    #define TMR1_LOW_LENTO    0b11011100
+
 ;=========================================================
 ; VARIABLES EN RAM
 ;=========================================================
     PSECT udata
 SeqIdx:         DS 1    ; Secuencia activa (0-3)
 StepIdx:        DS 1    ; Paso actual dentro de la secuencia
-; (Por ahora no usamos VelIdx ni botones)
+ContDesbordes:  DS 1    ; Contador de desbordes restantes
 
 ;=========================================================
 ; VECTOR DE RESET
@@ -48,13 +52,18 @@ Inicio:
     MOVLW   0x0F
     MOVWF   ADCON1
 
+    ; Configurar Timer1 (prescaler 1:8, 16 bits, interno)
+    MOVLW   0b10110000          ; RD16=1, T1CKPS=11, TMR1CS=0
+    MOVWF   T1CON
+    BCF     T1CON, 0            ; Timer1 apagado inicialmente
+
     ; Inicializar variables
     CLRF    SeqIdx          ; Empezar con secuencia 0
     CLRF    StepIdx         ; Paso 0
 
 BuclePrincipal:
     CALL    EjecutarPaso    ; Muestra el patrón actual y avanza al siguiente
-    CALL    RetardoSimple   ; Espera un tiempo para que se vea el cambio
+    CALL    RetardoVel       ; Usa Timer1 (velocidad fija)
     GOTO    BuclePrincipal
 
 ;---------------------------------------------------------
@@ -173,19 +182,27 @@ TblSeq3:
     RETLW   0x00
 
 ;=========================================================
-; RETARDO SIMPLE (provisional, ~200ms aprox con 8MHz)
+; RETARDO CON TIMER1 (velocidad fija: 8 desbordes)
 ;=========================================================
-RetardoSimple:
-    MOVLW   0xFF
-    MOVWF   0x20        ; Usamos una dirección temporal
-LoopExt:
-    MOVLW   0xFF
-    MOVWF   0x21
-LoopInt:
-    DECFSZ  0x21, F
-    GOTO    LoopInt
-    DECFSZ  0x20, F
-    GOTO    LoopExt
+RetardoVel:
+    MOVLW   8                   ; 8 desbordes (lento)
+    MOVWF   ContDesbordes
+
+IniciarTimer:
+    BCF     T1CON, 0            ; Detener Timer
+    MOVLW   TMR1_HIGH_LENTO
+    MOVWF   TMR1H
+    MOVLW   TMR1_LOW_LENTO
+    MOVWF   TMR1L
+    BCF     PIR1, 0             ; Limpiar bandera TMR1IF
+    BSF     T1CON, 0            ; Arrancar Timer
+
+EsperarDesborde:
+    BTFSS   PIR1, 0             ; ¿Desbordó?
+    GOTO    EsperarDesborde      ; No, seguir esperando
+    DECFSZ  ContDesbordes, F     ; Sí, descontar uno
+    GOTO    IniciarTimer         ; Faltan más, reiniciar Timer
+    BCF     T1CON, 0            ; Terminado, apagar Timer
     RETURN
 
     END
