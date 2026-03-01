@@ -111,7 +111,16 @@ EsperaOsc:
     
     ManejoINT0:
 	; Cambio de secuencia
-	BCF INTCON, 1, A ; Limpiar Bandera
+	INCF   SecAct, F, A ; INCF f, d, a Increment f
+	MOVLW  5
+	CPFSEQ SecAct, A    ; CPFSEQ f, a Compare f with WREG, skip =
+	GOTO   FinINT0
+	MOVLW  1
+	MOVWF  SecAct, A    ; Reiniciamos contador 5->1
+	
+    FinINT0: 
+	BCF    INTCON, 1, A ; Limpiar Bandera
+	
 	RETFIE
 	
     ManejoINT1:
@@ -120,7 +129,7 @@ EsperaOsc:
 	BCF INTCON3, 0, A ; Limpiar Bandera
 	RETFIE
     
-    ;=== RELOJ ===
+    ;=== Manejo de Velocidades ===
     Velocidad500ms:
     ; Recarga del timer para 500ms
     ; Con Fosc=8Mhz, tenemos un Tcy=0.5us y usamos un preescaler de 256
@@ -162,8 +171,32 @@ EsperaOsc:
 
 ;=== Bucle principal ===
 Loop:
-    CALL Seq2
-    GOTO Loop
+    MOVLW  1
+    CPFSEQ SecAct, A   ; Si SecAct = 1, salta linea
+    GOTO   Revisa2
+    CALL   Seq1
+    GOTO   Loop		; Mantiene en ciclo Seq1
+
+Revisa2: 
+    MOVLW  2
+    CPFSEQ SecAct, A    ; Si SecAct = 2, salta linea
+    GOTO   Revisa3
+    CALL   Seq2
+    GOTO   Revisa2	; Mantiene en ciclo Seq2
+
+Revisa3:
+    MOVLW  3
+    CPFSEQ SecAct, A     ; Si SecAct = 3, salta linea
+    GOTO   Revisa4       
+    CALL   Seq3
+    GOTO   Revisa3	 ; Mantiene en ciclo Seq3
+ 
+Revisa4:
+    MOVLW  4
+    CPFSEQ SecAct, A      ; Si SecAct = 4, salta linea
+    GOTO   Loop
+    CALL   Seq4
+    GOTO   Revisa4         ; Mantiene en ciclo Seq4
 
 ;=== Secuencia 1: Barrida con acumulacion derecha ===
 ; RD7 viaja acumulando hasta quedar todos ON
