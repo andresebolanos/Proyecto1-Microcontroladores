@@ -116,6 +116,7 @@ EsperaOsc:
 	
     ManejoINT1:
 	; Manejo de velocidad
+	BTG VelAct, 0, A  ; Invierte bit 0: 0=>1 o 1=>0
 	BCF INTCON3, 0, A ; Limpiar Bandera
 	RETFIE
     
@@ -137,9 +138,9 @@ EsperaOsc:
     GOTO EsperaLoop
     
     Velocidad250ms:
-    ; Recarga del timer para 259ms
+    ; Recarga del timer para 250ms
     ; Con Fosc=8Mhz, tenemos un Tcy=0.5us y usamos un preescaler de 256
-    ; 250ms/(0.5us*256)= 1953 ticks -> calculo de precarga 65536-1953=63583=F85F
+    ; 250ms/(0.5us*256)= 1953 ticks -> calculo de precarga 65536-1953= 63583 = F85F
     BCF T0CON, 7, A ; Detener timer
     
     MOVLW 0XF8
@@ -161,11 +162,11 @@ EsperaOsc:
 
 ;=== Bucle principal ===
 Loop:
-    ; 1. Revisar pulsador de secuencia (RB0)
-    ;    Si fue presionado = avanzar SecAct
-
-    ; 2. Revisar pulsador de velocidad (RB1)
-    ;    Si fue presionado = cambiar VelAct
+    BSF LATD, 4, A ;LED RD4=ON
+    CALL Retardo
+    
+    BCF LATD, 4, A ;LED RD4=OFF
+    CALL Retardo
 
     ; 3. Ejecutar un paso de la secuencia actual
     ;    Segun SecAct llamar a Seq1, Seq2, Seq3 o Seq4
@@ -173,22 +174,22 @@ Loop:
     GOTO Loop
 
 ;=== Secuencia 1: Izquierda a derecha ===
-; RD4 ? RD5 ? RD6 ? RD7
+; RD4 => RD5 => RD6 => RD7
 Seq1:
     RETURN
 
 ;=== Secuencia 2: Derecha a izquierda ===
-; RD7 ? RD6 ? RD5 ? RD4
+; RD7 => RD6 => RD5 => RD4
 Seq2:
     RETURN
 
 ;=== Secuencia 3: Parpadeo simultaneo ===
-; TODOS ON ? TODOS OFF
+; TODOS ON => TODOS OFF
 Seq3:
     RETURN
 
 ;=== Secuencia 4: Alternado ===
-; RD4,RD6 ON / RD5,RD7 OFF ? intercambiar
+; RD4,RD6 ON / RD5,RD7 OFF => intercambiar
 Seq4:
     RETURN
 
@@ -198,10 +199,11 @@ ChecarPulsador:
     RETURN
 
 ;=== Retardo segun velocidad actual ===
-; Si VelAct=0 ? 250ms
-; Si VelAct=1 ? 500ms
+; VelAct=0 => 250ms | VelAct=1 => 500ms
 Retardo:
-    RETURN
+    TSTFSZ VelAct, A ;Test f, skip if 0
+    GOTO Velocidad500ms
+    GOTO Velocidad250ms
 
 ;=== Variables (Access Bank) ===
     PSECT udata_acs, class=COMRAM
