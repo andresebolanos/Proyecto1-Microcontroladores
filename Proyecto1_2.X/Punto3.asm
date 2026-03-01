@@ -162,35 +162,113 @@ EsperaOsc:
 
 ;=== Bucle principal ===
 Loop:
-    BSF LATD, 4, A ;LED RD4=ON
-    CALL Retardo
-    
-    BCF LATD, 4, A ;LED RD4=OFF
-    CALL Retardo
-
-    ; 3. Ejecutar un paso de la secuencia actual
-    ;    Segun SecAct llamar a Seq1, Seq2, Seq3 o Seq4
-
+    CALL Seq2
     GOTO Loop
 
-;=== Secuencia 1: Izquierda a derecha ===
-; RD4 => RD5 => RD6 => RD7
+;=== Secuencia 1: Barrida con acumulacion derecha ===
+; RD7 viaja acumulando hasta quedar todos ON
 Seq1:
+    ; Pasada 1: RD7 viaja hasta RD4
+    MOVLW 0b10000000
+    MOVWF LATD, A
+    CALL  Retardo
+    MOVLW 0b01000000
+    MOVWF LATD, A
+    CALL  Retardo
+    MOVLW 0b00100000
+    MOVWF LATD, A
+    CALL  Retardo
+    MOVLW 0b00010000
+    MOVWF LATD, A
+    CALL  Retardo
+    
+    ; Pasada 2: RD7 viaja hasta RD5
+    MOVLW 0b10010000
+    MOVWF LATD, A
+    CALL  Retardo
+    MOVLW 0b01010000
+    MOVWF LATD, A
+    CALL  Retardo
+    MOVLW 0b00110000
+    MOVWF LATD, A
+    CALL  Retardo
+    
+    ; Pasada 3: RD7 viaja hasta RD4
+    MOVLW 0b10110000
+    MOVWF LATD, A
+    CALL  Retardo
+    MOVLW 0b01110000
+    MOVWF LATD, A
+    CALL  Retardo
+    MOVLW 0b01110000
+    MOVWF LATD, A
+    CALL  Retardo
+    
+    ; Pasada 4: Todos ON
+    MOVLW 0b11110000
+    MOVWF LATD, A
+    CALL  Retardo
+    
+    CLRF  LATD, A ; todos OFF, reinicia
+    
     RETURN
 
-;=== Secuencia 2: Derecha a izquierda ===
-; RD7 => RD6 => RD5 => RD4
+;=== Secuencia 2: Rebote RD7-RD4-RD7 ===
 Seq2:
+    
+    MOVLW 0b10000000  ;RD7
+    MOVWF LATD, A
+    CALL  Retardo
+    
+    MOVLW 0b01000000  ;RD6
+    MOVWF LATD, A
+    CALL  Retardo
+    
+    MOVLW 0b00100000  ;RD5
+    MOVWF LATD, A
+    CALL  Retardo
+    
+    MOVLW 0b00010000  ;RD4
+    MOVWF LATD, A
+    CALL  Retardo
+    
+    MOVLW 0b00100000  ;RD5
+    MOVWF LATD, A
+    CALL  Retardo
+    
+    MOVLW 0b01000000  ;RD6
+    MOVWF LATD, A
+    CALL  Retardo
+    
+    MOVLW 0b10000000  ;RD7
+    MOVWF LATD, A
+    CALL  Retardo
+    
     RETURN
 
 ;=== Secuencia 3: Parpadeo simultaneo ===
 ; TODOS ON => TODOS OFF
 Seq3:
+    MOVLW 0b11110000	; RD4-RD7
+    MOVWF LATD, A	; Todos ON
+    CALL  Retardo
+    
+    CLRF LATD, A	; Todos OFF
+    CALL  Retardo
+    
     RETURN
 
 ;=== Secuencia 4: Alternado ===
 ; RD4,RD6 ON / RD5,RD7 OFF => intercambiar
 Seq4:
+    MOVLW 0b01010000	; RD4+RD6 
+    MOVWF LATD, A   
+    CALL  Retardo
+    
+    MOVLW 0b10100000    ; RD5+RD7
+    MOVWF LATD, A
+    CALL  Retardo
+    
     RETURN
 
 ;=== Antirebote y lectura de pulsador ===
