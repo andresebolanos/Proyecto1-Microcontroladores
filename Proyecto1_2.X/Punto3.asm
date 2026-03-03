@@ -26,9 +26,9 @@ resetVec:
     
 ;=== Vector de Interrupcion ===
     PSECT isrVec, class=CODE, reloc=2
-    ORG  0b00001000             ; 0x08 Vector de interrupcion
+    ORG  0x0008             ; 0x08 Vector de interrupcion
     GOTO ISR
-
+    
 ;=== Codigo Principal ===
     PSECT main_code, class=CODE, reloc=2
 
@@ -42,37 +42,37 @@ EsperaOsc:
     GOTO  EsperaOsc
     
     ;=== Configurar Puertos ===
-    CLRF TRISD, A               ; RD como salidas
-    CLRF LATD, A                ; Apagar PORTD
-    SETF TRISB, A               ; RB como entradas
-    BSF  INTCON2, 7, A          ; Pull-ups PORTB deshabilitados
-    BCF  INTCON2, 6, A          ; INT0 flanco de bajada
-    BCF  INTCON2, 5, A          ; INT1 flanco de bajada
-    BCF  INTCON3, 0, A          ; Limpiar bandera INT1IF
-    BSF  INTCON3, 3, A          ; Habilitar INT1IE
-    BCF  INTCON, 1, A           ; Limpiar bandera INT0IF
-    BSF  INTCON, 4, A           ; Habilitar INT0IE
-    BSF  INTCON, 7, A           ; GIE = 1 (interrupciones globales)
+    CLRF  TRISD, A               ; RD como salidas
+    MOVLW 0x0F
+    MOVWF ADCON1, A              ; Todos los pines AN como digitales
+    CLRF  LATD, A                ; Apagar PORTD
+    SETF  TRISB, A               ; RB como entradas
+    BSF   INTCON2, 7, A          ; Pull-ups PORTB deshabilitados
+    BCF   INTCON2, 6, A          ; INT0 flanco de bajada
+    BCF   INTCON2, 5, A          ; INT1 flanco de bajada
+    BCF   INTCON3, 0, A          ; Limpiar bandera INT1IF
+    BSF   INTCON3, 3, A          ; Habilitar INT1IE
+    BCF   INTCON, 1, A           ; Limpiar bandera INT0IF
+    BSF   INTCON, 4, A           ; Habilitar INT0IE
+    BSF   INTCON, 7, A           ; GIE = 1 (interrupciones globales)
     
     ;=== Configurar Timer0 ===
     ; 16 bits, preescaler 1:256, reloj interno, Timer0=OFF
     MOVLW 0b00000111
     MOVWF T0CON, A
-    MOVLW 0
-    MOVWF VelAct, A             ; Velocidad inicial = rapida (250ms)
-    MOVLW 1
-    MOVWF SecAct, A             ; Secuencia inicial = 1
+    CLRF  VelAct, A             ; Velocidad inicial = rapida (250ms)
+    CLRF  SecAct, A             ; Secuencia inicial = 0
     GOTO  Loop 
     
 ;=== Rutina de Interrupcion ===
 ISR:
     BTFSC INTCON, 1, A          ; Si INT0IF=1 fue INT0
-    GOTO  ManejoINT0
+    CALL  ManejoINT0
     BTFSC INTCON3, 0, A         ; Si INT1IF=1 fue INT1
-    GOTO  ManejoINT1
+    CALL  ManejoINT1
     RETFIE
 
-;=== Antirebote por software (~65ms) ===
+;=== Antirebote (~65ms) ===
 ; Ciclos = 65ms / 0.5us = 130000
 ; Iteraciones = 130000 / 2 = 65000
 ; 255 * 255 = 65025 = 0xFF * 0xFF
@@ -100,23 +100,23 @@ ManejoINT0:
     BCF    INTCON, 1, A          ; Limpiar bandera primero
     CALL   Antirebote            ; Esperar ~65ms
     BTFSC  PORTB, 0, A           ; Si RB0=1 fue rebote, ignorar
-    RETFIE
+    RETURN
     INCF   SecAct, F, A          ; Pulsacion real: SecAct + 1
-    MOVLW  5
-    CPFSEQ SecAct, A             ; Si SecAct = 5, reiniciar (salta siguiente linea)
-    RETFIE			 ; SecAct no es 5, ya quedo bien
-    MOVLW 1
-    MOVWF SecAct, A              ; Reiniciar a 1
-    RETFIE
+    MOVF   SecAct, W, A          ; Cargamos SecAct en W
+    XORLW  4	                 ; XOR con 4: resultado=0 si SecAct=4
+    BNZ    FinINT0		 ; Si el resultado es distinto de 0 SecAct aun no llega a 4
+    CLRF   SecAct, A		 ; Si llego a 4, reiniciar a 0
+FinINT0:
+    RETURN
 
 ;=== Manejo INT1: Cambio de velocidad (RB1) ===
 ManejoINT1:
     BCF   INTCON3, 0, A         ; Limpiar bandera primero
     CALL  Antirebote            ; Esperar ~65ms
     BTFSC PORTB, 1, A           ; Si RB1=1 fue rebote, ignorar
-    RETFIE
+    RETURN
     BTG   VelAct, 0, A          ; Alternar velocidad: 0->1 o 1->0
-    RETFIE
+    RETURN
 
 ;=== Velocidad 500ms ===
 ; Ticks = 500ms/(0.5us*256) = 3906
@@ -153,29 +153,29 @@ EsperaLoop:
 
 ;=== Bucle principal ===
 Loop:
-    MOVLW  1
-    CPFSEQ SecAct, A            ; Si SecAct=1 ejecutar Seq1
+    MOVLW  0
+    CPFSEQ SecAct, A            ; Si SecAct=0 ejecutar Seq1
     GOTO   Revisa2
     CALL   Seq1
     GOTO   Loop
 
 Revisa2:
-    MOVLW  2
-    CPFSEQ SecAct, A            ; Si SecAct=2 ejecutar Seq2
+    MOVLW  1
+    CPFSEQ SecAct, A            ; Si SecAct=1 ejecutar Seq2
     GOTO   Revisa3
     CALL   Seq2
     GOTO   Revisa2
 
 Revisa3:
-    MOVLW  3
-    CPFSEQ SecAct, A            ; Si SecAct=3 ejecutar Seq3
+    MOVLW  2
+    CPFSEQ SecAct, A            ; Si SecAct=2 ejecutar Seq3
     GOTO   Revisa4
     CALL   Seq3
     GOTO   Revisa3
 
 Revisa4:
-    MOVLW  4
-    CPFSEQ SecAct, A            ; Si SecAct=4 ejecutar Seq4
+    MOVLW  3
+    CPFSEQ SecAct, A            ; Si SecAct=3 ejecutar Seq4
     GOTO   Loop
     CALL   Seq4
     GOTO   Revisa4
@@ -207,9 +207,6 @@ Seq1:
     CALL  Retardo
     ; Pasada 3: RD7 viaja hasta RD6
     MOVLW 0b10110000
-    MOVWF LATD, A
-    CALL  Retardo
-    MOVLW 0b01110000
     MOVWF LATD, A
     CALL  Retardo
     MOVLW 0b01110000
